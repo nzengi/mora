@@ -6,6 +6,49 @@ Offline payment escrow on Solana — devnet prototype.
 - **3 instructions:** `create_escrow`, `settle`, `close_escrow`
 - **Voucher:** 84-byte Ed25519-signed message — `"MORA" | escrow | nonce | payee | amount`
 
+## Architecture
+
+On-chain is three instructions. Offline signing never talks to RPC. The web demo’s Bluetooth bus and voucher hash chain are **off-chain** — they are not in the program.
+
+```mermaid
+sequenceDiagram
+  participant Alice
+  participant Escrow as Escrow PDA
+  participant Bob
+  participant Receipt as Receipt PDA
+
+  Alice->>Escrow: create_escrow (lock SOL, expiry)
+  Note over Alice: offline — no RPC
+  Alice->>Alice: sign 84-byte voucher
+  Alice-->>Bob: voucher (BT / QR / CLI blob)
+  Bob->>Escrow: Ed25519 verify ix + settle
+  Escrow->>Bob: transfer lamports
+  Bob->>Receipt: init (nonce consumed)
+  Note over Alice,Escrow: after expires_at
+  Alice->>Escrow: close_escrow (rent + remainder)
+```
+
+### Accounts
+
+| Account | Seeds | Role |
+|---|---|---|
+| Escrow | `["escrow", authority, seed_le]` | Locked SOL, `spent`, `expires_at` |
+| Receipt | `["receipt", escrow, nonce_le]` | `init` on settle → same nonce cannot replay |
+
+### Voucher (84 bytes)
+
+```
+"MORA" (4) | escrow pubkey (32) | nonce u64 LE (8) | payee (32) | amount u64 LE (8)
+```
+
+`settle` requires the **previous** instruction to be Solana’s Ed25519 native program, self-contained (`instruction_index = 0xFFFF`), signer = `escrow.authority`, message = those 84 bytes. Payee is bound by the message, not by a signer on `settle`. Relayer (`submitter`) only pays receipt rent + tx fee.
+
+### What is not on-chain
+
+- Simulated BT (`BroadcastChannel` in `web/`)
+- Alice’s local voucher hash chain
+- Phantom as a funder for in-browser test keypairs
+
 ## Repo layout
 
 ```

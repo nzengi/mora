@@ -16,9 +16,14 @@
 <nav class="nav">
   <div class="nav-inner">
     <a class="nav-logo" href="#">Mora</a>
+    <div class="nav-links">
+      <a class="nav-link" href="#how">How it works</a>
+      <a class="nav-link" href="#architecture">Architecture</a>
+      <a class="nav-link" href="#demo">Live demo</a>
+    </div>
     <div class="nav-actions">
-      <span class="nav-net">Devnet</span>
-      <span class="nav-meta">contract&nbsp;<a id="meta-program-link" href="#" target="_blank" rel="noopener"><b id="meta-program">…</b></a></span>
+      <span class="nav-net" data-tip="All txs hit Solana devnet — not mainnet.">Devnet</span>
+      <span class="nav-meta">program&nbsp;<a id="meta-program-link" href="#" target="_blank" rel="noopener"><b id="meta-program">…</b></a></span>
       <span id="wallet-area">
         <button class="connect-btn" id="connect-btn"><span class="ph-mark"></span> Connect Phantom</button>
       </span>
@@ -28,40 +33,138 @@
 
 <!-- ============ HERO ============ -->
 <header class="hero">
-  <h1 class="hero-title">Offline payments on <span>Solana</span>.</h1>
+  <p class="hero-kicker">Devnet prototype · two phones, one escrow</p>
+  <h1 class="hero-title">Pay offline.<br>Settle on <span>Solana</span>.</h1>
   <p class="hero-sub">
-    Lock SOL into an on-chain escrow, sign voucher messages while offline, settle them later — replay-protected, expiry-bounded, fully self-custody. Every transaction below is a real call on devnet.
+    Alice locks SOL in escrow, signs a voucher with no internet, Bob settles it later.
+    Replay-protected. Self-custody. Real devnet transactions — not a mock.
   </p>
+  <div class="hero-cta">
+    <a class="hero-btn" href="#demo">Try the live demo</a>
+    <a class="hero-btn ghost" href="#how">How it works</a>
+  </div>
   <div class="hero-meta">
-    <span><b>3 instructions:</b> create_escrow · settle · close_escrow</span>
-    <span><b>84-byte voucher:</b> "MORA" | escrow | nonce | payee | amount</span>
-    <span>need devnet SOL? <a id="faucet-link" href="https://faucet.solana.com/" target="_blank" rel="noopener">faucet.solana.com</a></span>
+    <span data-tip="The on-chain program only has three instructions."><b>3 instructions</b> · create · settle · close</span>
+    <span data-tip='Canonical 84-byte message: "MORA" | escrow | nonce | payee | amount.'><b>84-byte voucher</b> · Ed25519 signed</span>
+    <span>Need SOL? <a id="faucet-link" href="https://faucet.solana.com/" target="_blank" rel="noopener">faucet.solana.com</a></span>
   </div>
 </header>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <p class="section-label">How it works</p>
+    <h2 class="how-title">Five steps. Three on-chain calls.</h2>
+    <p class="how-lead">Bluetooth in this demo is simulated in-browser. Signing and settle are real.</p>
+    <ol class="how-grid">
+      <li class="how-card">
+        <span class="how-n">01</span>
+        <h3>Open escrow</h3>
+        <p>Alice locks SOL into a PDA. Funds stay hers until a signed voucher is settled.</p>
+      </li>
+      <li class="how-card">
+        <span class="how-n">02</span>
+        <h3>Go offline</h3>
+        <p>No RPC. The phone still holds the escrow key and can sign locally.</p>
+      </li>
+      <li class="how-card">
+        <span class="how-n">03</span>
+        <h3>Sign voucher</h3>
+        <p>An 84-byte message names payee, amount, and nonce. Ed25519, not a transaction.</p>
+      </li>
+      <li class="how-card">
+        <span class="how-n">04</span>
+        <h3>Settle</h3>
+        <p>Bob (or any relayer) submits verify + settle. Receipt PDA blocks replay.</p>
+      </li>
+      <li class="how-card">
+        <span class="how-n">05</span>
+        <h3>Close</h3>
+        <p>After expiry, leftover SOL and rent return to Alice.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section class="arch" id="architecture">
+  <div class="how-inner">
+    <p class="section-label">Architecture</p>
+    <h2 class="how-title">On-chain is small. Offline is a signature.</h2>
+    <p class="how-lead">The program never sees Bluetooth. It only sees an Ed25519 verify ix, then settle.</p>
+
+    <div class="arch-flow" aria-label="Protocol flow">
+      <div class="arch-node">
+        <span class="arch-k">Alice</span>
+        <strong>create_escrow</strong>
+        <span>Lock SOL in PDA</span>
+      </div>
+      <span class="arch-arrow" aria-hidden="true">→</span>
+      <div class="arch-node off">
+        <span class="arch-k">Offline</span>
+        <strong>sign voucher</strong>
+        <span>84 bytes, no RPC</span>
+      </div>
+      <span class="arch-arrow" aria-hidden="true">→</span>
+      <div class="arch-node">
+        <span class="arch-k">Relayer</span>
+        <strong>verify + settle</strong>
+        <span>Receipt PDA = nonce</span>
+      </div>
+      <span class="arch-arrow" aria-hidden="true">→</span>
+      <div class="arch-node">
+        <span class="arch-k">Alice</span>
+        <strong>close_escrow</strong>
+        <span>After expiry</span>
+      </div>
+    </div>
+
+    <div class="arch-grid">
+      <div class="arch-card">
+        <h3>PDAs</h3>
+        <p><code>escrow</code> ← <code>["escrow", authority, seed]</code></p>
+        <p><code>receipt</code> ← <code>["receipt", escrow, nonce]</code> — <code>init</code> makes replay fail.</p>
+      </div>
+      <div class="arch-card">
+        <h3>Voucher layout</h3>
+        <p class="arch-bytes"><span>MORA</span><span>escrow 32</span><span>nonce 8</span><span>payee 32</span><span>amount 8</span></p>
+        <p>Signer must be <code>escrow.authority</code>. Payee is in the bytes, not a settle signer.</p>
+      </div>
+      <div class="arch-card">
+        <h3>Settle tx</h3>
+        <p>Ix 0: Ed25519 native (self-contained). Ix 1: <code>settle</code> reads instructions sysvar, checks previous ix.</p>
+      </div>
+      <div class="arch-card">
+        <h3>Demo only</h3>
+        <p>BT bus is <code>BroadcastChannel</code>. Hash chain lives in localStorage. Neither is in the program.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ============ SCENARIO BAR ============ -->
 <div class="scenario-bar">
   <div class="scenario-row">
-    <button class="scenario-btn" id="run-scenario" disabled>
+    <button class="scenario-btn" id="run-scenario" disabled data-tip="Walks through open → offline → sign → settle → close on live devnet.">
       <span>▶</span> Run scenario
     </button>
     <div class="scenario-steps" id="steps">
-      <span class="scenario-step" data-step="1">1 · Open escrow</span>
+      <span class="scenario-step" data-step="1" data-tip="create_escrow — lock SOL in a PDA.">1 · Open escrow</span>
       <span class="scenario-arrow">→</span>
-      <span class="scenario-step" data-step="2">2 · Go offline</span>
+      <span class="scenario-step" data-step="2" data-tip="No RPC. Signing happens on the device.">2 · Go offline</span>
       <span class="scenario-arrow">→</span>
-      <span class="scenario-step" data-step="3">3 · Sign voucher</span>
+      <span class="scenario-step" data-step="3" data-tip="84-byte Ed25519 voucher for Bob.">3 · Sign voucher</span>
       <span class="scenario-arrow">→</span>
-      <span class="scenario-step" data-step="4">4 · Settle</span>
+      <span class="scenario-step" data-step="4" data-tip="Relayer submits verify + settle. Receipt blocks replay.">4 · Settle</span>
       <span class="scenario-arrow">→</span>
-      <span class="scenario-step" data-step="5">5 · Close</span>
+      <span class="scenario-step" data-step="5" data-tip="After expiry, leftover SOL returns to Alice.">5 · Close</span>
     </div>
     <span class="scenario-status" id="scenario-status">connect Phantom to begin</span>
   </div>
 </div>
 
 <!-- ============ DEMO SPLIT ============ -->
-<section class="demo-split">
+<section class="demo-split" id="demo">
 
   <div class="demo-stage">
 
@@ -69,7 +172,8 @@
     <div class="phone-wrap">
       <div class="phone-label">
         <span class="phone-dot" style="background:#fe6a3c"></span>
-        <span>Alice · Pay (you, signing offline)</span>
+        <span>Alice · Pay</span>
+        <button class="tip-btn" type="button" data-tip="In-browser keypair. Phantom only funds it. Signs vouchers locally — no RPC." aria-label="About Alice">?</button>
       </div>
       <div class="phone-bezel">
         <div class="phone-notch"></div>
@@ -169,7 +273,8 @@
     <div class="phone-wrap">
       <div class="phone-label">
         <span class="phone-dot" style="background:#2c7a55"></span>
-        <span>Bob · POS (settles vouchers, fixed receiver)</span>
+        <span>Bob · POS</span>
+        <button class="tip-btn" type="button" data-tip="Merchant phone. Receives vouchers over the simulated BT bus, then settles on-chain." aria-label="About Bob">?</button>
       </div>
       <div class="phone-bezel">
         <div class="phone-notch"></div>
@@ -281,17 +386,22 @@
 
   </div>
 
-  <div class="demo-narration">
-    <div class="section-label">For the judge</div>
+  <details class="demo-narration">
+    <summary>Technical notes for judges</summary>
     <ol>
-      <li><strong>Connect Phantom</strong> (top-right). Devnet only — make sure Phantom shows the network as <code>Devnet</code> when it asks to approve transactions. Need SOL? Use <a href="https://faucet.solana.com/" target="_blank">faucet.solana.com</a>.</li>
-      <li><strong>Open escrow:</strong> Alice locks SOL on-chain into a PDA derived from <code>(your_pubkey, seed)</code>. Real <code>create_escrow</code> tx, real lamports moved.</li>
-      <li><strong>Go offline + sign voucher:</strong> Alice's phone produces an 84-byte canonical message (<code>"MORA" | escrow | nonce | payee | amount</code>) and Phantom's <code>signMessage</code> Ed25519-signs it. No RPC call — purely offline.</li>
-      <li><strong>Settle:</strong> Same wallet plays the relayer. Submits a 2-instruction tx: Solana's Ed25519 native verify + our <code>settle</code> ix. Contract validates the previous ix was Ed25519 over the canonical bytes, transfers lamports to the receiver, creates a Receipt PDA. Replay of the same nonce fails on init.</li>
-      <li><strong>Close:</strong> After expiry, <code>close_escrow</code> reclaims rent + remainder. Whole protocol is three on-chain instructions.</li>
+      <li><strong>Connect Phantom</strong> (top-right). Devnet only. Need SOL? <a href="https://faucet.solana.com/" target="_blank" rel="noopener">faucet.solana.com</a>.</li>
+      <li><strong>Open escrow:</strong> Alice locks SOL into a PDA <code>(authority, seed)</code>. Real <code>create_escrow</code>.</li>
+      <li><strong>Sign voucher:</strong> 84-byte message <code>"MORA" | escrow | nonce | payee | amount</code>, Ed25519 locally. No RPC.</li>
+      <li><strong>Settle:</strong> Ed25519 native verify + <code>settle</code>. Receipt PDA makes the nonce unreplayable.</li>
+      <li><strong>Close:</strong> After expiry, <code>close_escrow</code> returns rent + remainder.</li>
     </ol>
-  </div>
+  </details>
 </section>
+
+<footer class="site-foot">
+  <span>Mora · offline escrow on Solana</span>
+  <a href="https://explorer.solana.com/address/9fcXHD3pHDKLX79JuVgCEKQiqYkvVqFtpoAEVjBq4aJ8?cluster=devnet" target="_blank" rel="noopener">Program on explorer</a>
+</footer>
 
 <script type="module">
 import {
